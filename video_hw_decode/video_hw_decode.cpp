@@ -34,18 +34,18 @@ static int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type) 
     return err;
 }
 
-static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
-                                        const enum AVPixelFormat *pix_fmts) {
-    const enum AVPixelFormat *p;
-
-    for (p = pix_fmts; *p != -1; p++) {
-        if (*p == hw_pix_fmt)
-            return *p;
-    }
-
-    fprintf(stderr, "Failed to get HW surface format.\n");
-    return AV_PIX_FMT_NONE;
-}
+//static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
+//                                        const enum AVPixelFormat *pix_fmts) {
+//    const enum AVPixelFormat *p;
+//
+//    for (p = pix_fmts; *p != -1; p++) {
+//        if (*p == hw_pix_fmt)
+//            return *p;
+//    }
+//
+//    fprintf(stderr, "Failed to get HW surface format.\n");
+//    return AV_PIX_FMT_NONE;
+//}
 
 // 把解码压缩包，并把帧数据写入到output_file文件中
 static int decode_write(AVCodecContext *avctx, AVPacket *packet) {
@@ -81,7 +81,7 @@ static int decode_write(AVCodecContext *avctx, AVPacket *packet) {
             goto fail;
         }
 
-        // 如果返回的帧格式是硬解码格式，则还需要到对应的硬件设备上取回数据
+        // 如果返回的帧格式是硬件加速解码格式，则还需要到对应的硬件设备上取回数据
         if (frame->format == hw_pix_fmt) {
             // 从硬加速设备上把数据提取到CPU
             if ((ret = av_hwframe_transfer_data(sw_frame, frame, 0)) < 0) {
@@ -195,6 +195,8 @@ int main(int argc, char *argv[]) {
         }
         if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
             config->device_type == type) {
+            // 记录硬件加速解码的帧格式。
+            // 解码时，通过帧格式判断解码帧是否由硬件加速解码，若遇到硬加速的帧需要从硬件中获取解码数据。
             hw_pix_fmt = config->pix_fmt;
             break;
         }
@@ -208,9 +210,6 @@ int main(int argc, char *argv[]) {
     // 通过流数据检测到的配置信息直接赋值给解码上下文
     if (avcodec_parameters_to_context(decoder_ctx, video->codecpar) < 0)
         return -1;
-
-    // 使用硬件加速，需要指定这个函数返回硬件加速的编码格式
-    decoder_ctx->get_format = get_hw_format;
 
     // 初始化硬加速设备类型，并把硬加速上下文装配到编解码上下文中
     if (hw_decoder_init(decoder_ctx, type) < 0)
